@@ -65,3 +65,19 @@ export interface LocationTotal {
   total_items: number;
   coordinators_active: number;
 }
+
+export interface Visitor {
+  id: string;
+  name: string;
+  email: string;
+  affiliation: string;
+  created_at: string;
+}
+
+export interface DepotInventory {
+  category_id: string;
+  category_name: string;
+  in_stock: number;
+  total_in: number;
+  total_out: number;
+}

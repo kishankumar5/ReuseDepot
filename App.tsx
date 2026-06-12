@@ -14,11 +14,12 @@ import InventoryScreen from "./src/screens/InventoryScreen";
 import DepotHomeScreen from "./src/screens/DepotHomeScreen";
 import DepotReceiveScreen from "./src/screens/DepotReceiveScreen";
 import CheckoutScreen from "./src/screens/CheckoutScreen";
+import KioskScreen from "./src/screens/KioskScreen";
 
 type Screen =
   | "loading" | "login" | "mode-select"
   | "location-select" | "quick-log" | "counter" | "inventory"
-  | "depot-home" | "depot-receive" | "depot-checkout";
+  | "depot-home" | "depot-receive" | "depot-checkout" | "kiosk";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("loading");
@@ -91,6 +92,7 @@ export default function App() {
         <LocationSelectScreen
           onSelect={(l) => { setLocation(l); setScreen("quick-log"); }}
           onLogout={() => supabase.auth.signOut()}
+          onBack={() => setScreen("mode-select")}
           coordinatorName={coordinator.name}
         />
       )}
@@ -117,9 +119,13 @@ export default function App() {
       {screen === "depot-home" && (
         <DepotHomeScreen
           onReceive={() => setScreen("depot-receive")}
-          onCheckout={() => setScreen("depot-checkout")}
+          onKiosk={() => setScreen("kiosk")}
           onBack={() => setScreen("mode-select")}
         />
+      )}
+
+      {screen === "kiosk" && (
+        <KioskScreen onExit={() => setScreen("depot-home")} />
       )}
 
       {screen === "depot-receive" && coordinator && depotLocationId && (

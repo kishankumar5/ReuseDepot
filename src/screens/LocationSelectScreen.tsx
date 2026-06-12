@@ -7,10 +7,11 @@ import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 interface Props {
   onSelect: (location: Location) => void;
   onLogout: () => void;
+  onBack: () => void;
   coordinatorName: string;
 }
 
-export default function LocationSelectScreen({ onSelect, onLogout, coordinatorName }: Props) {
+export default function LocationSelectScreen({ onSelect, onLogout, onBack, coordinatorName }: Props) {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,12 +27,13 @@ export default function LocationSelectScreen({ onSelect, onLogout, coordinatorNa
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={onBack}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
         <View style={styles.headerTop}>
-          <Image 
-                      source={require("../../assets/NULogo.png")} 
-                      style={{ width: 48, height: 48 }} 
-                      resizeMode="contain" 
-                    />
+          <Image
+            source={require("../../assets/NULogo.png")}
+            style={{ width: 48, height: 48 }}
+            resizeMode="contain"
+          />
           <TouchableOpacity onPress={onLogout}><Text style={styles.logoutText}>Log out</Text></TouchableOpacity>
         </View>
         <Text style={styles.greeting}>Hi, {coordinatorName}</Text>
@@ -68,6 +70,7 @@ const styles = StyleSheet.create({
   headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: SPACING.xl },
   brandMark: { width: 32, height: 32, backgroundColor: COLORS.red, alignItems: "center", justifyContent: "center" },
   brandN: { color: COLORS.white, fontSize: 18, fontWeight: FONT_WEIGHT.black, fontStyle: "italic" },
+  backText: { color: COLORS.red, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.semibold, marginBottom: SPACING.md },
   logoutText: { color: COLORS.textLight, fontSize: FONT_SIZE.small },
   greeting: { color: COLORS.textLight, fontSize: FONT_SIZE.body, marginBottom: SPACING.xs },
   title: { color: COLORS.white, fontSize: FONT_SIZE.heading, fontWeight: FONT_WEIGHT.black },

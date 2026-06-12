@@ -6,11 +6,11 @@ import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 
 interface Props {
   onReceive: () => void;
-  onCheckout: () => void;
+  onKiosk: () => void;
   onBack: () => void;
 }
 
-export default function DepotHomeScreen({ onReceive, onCheckout, onBack }: Props) {
+export default function DepotHomeScreen({ onReceive, onKiosk, onBack }: Props) {
   const [inventory, setInventory] = useState<DepotInventory[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -32,19 +32,23 @@ export default function DepotHomeScreen({ onReceive, onCheckout, onBack }: Props
         <Text style={styles.subtitle}>{totalStock} items in stock</Text>
       </View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionCard} onPress={onReceive} activeOpacity={0.8}>
-          <Text style={styles.actionEmoji}>📥</Text>
-          <Text style={styles.actionTitle}>Receive</Text>
-          <Text style={styles.actionDesc}>Log incoming donations</Text>
-        </TouchableOpacity>
+      <TouchableOpacity style={styles.receiveBanner} onPress={onReceive} activeOpacity={0.85}>
+        <Text style={styles.receiveEmoji}>📥</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.receiveTitle}>Receive Donation</Text>
+          <Text style={styles.receiveDesc}>Log incoming donations from visitors</Text>
+        </View>
+        <Text style={styles.receiveArrow}>→</Text>
+      </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.actionCard, styles.actionCardRed]} onPress={onCheckout} activeOpacity={0.8}>
-          <Text style={styles.actionEmoji}>📤</Text>
-          <Text style={[styles.actionTitle, { color: COLORS.white }]}>Checkout</Text>
-          <Text style={[styles.actionDesc, { color: "rgba(255,255,255,0.7)" }]}>Student picks up items</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity style={styles.kioskBanner} onPress={onKiosk} activeOpacity={0.85}>
+        <Text style={styles.kioskEmoji}>♻️</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.kioskTitle}>Open Kiosk Mode</Text>
+          <Text style={styles.kioskDesc}>Hand the iPad to a visitor to log items themselves</Text>
+        </View>
+        <Text style={styles.kioskArrow}>→</Text>
+      </TouchableOpacity>
 
       <ScrollView contentContainerStyle={styles.stockList}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
@@ -77,15 +81,16 @@ const styles = StyleSheet.create({
   back: { color: COLORS.red, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.semibold, marginBottom: SPACING.md },
   title: { color: COLORS.white, fontSize: FONT_SIZE.heading, fontWeight: FONT_WEIGHT.black },
   subtitle: { color: COLORS.textLight, fontSize: FONT_SIZE.body, marginTop: SPACING.xs },
-  actions: { flexDirection: "row", padding: SPACING.xl, gap: SPACING.md },
-  actionCard: {
-    flex: 1, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.divider,
-    padding: SPACING.xl, alignItems: "center",
+  receiveBanner: {
+    flexDirection: "row", alignItems: "center", gap: SPACING.lg,
+    marginHorizontal: SPACING.xl, marginTop: SPACING.xl, marginBottom: SPACING.md,
+    backgroundColor: "#EBF0FF", borderRadius: 8,
+    padding: SPACING.xl, borderWidth: 1, borderColor: "#C5D0F5",
   },
-  actionCardRed: { backgroundColor: COLORS.red, borderColor: COLORS.red },
-  actionEmoji: { fontSize: 32, marginBottom: SPACING.md },
-  actionTitle: { fontSize: FONT_SIZE.large, fontWeight: FONT_WEIGHT.bold, color: COLORS.textPrimary, marginBottom: SPACING.xs },
-  actionDesc: { fontSize: FONT_SIZE.small, color: COLORS.textSecondary, textAlign: "center" },
+  receiveEmoji: { fontSize: 28 },
+  receiveTitle: { fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold, color: "#2D4E8C" },
+  receiveDesc: { fontSize: FONT_SIZE.small, color: "#4A5A7A", marginTop: 2 },
+  receiveArrow: { fontSize: FONT_SIZE.large, color: "#2D4E8C", fontWeight: FONT_WEIGHT.bold },
   stockList: { paddingHorizontal: SPACING.xl, paddingBottom: 100 },
   sectionLabel: { fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold, color: COLORS.red, letterSpacing: 2.5, marginBottom: SPACING.lg },
   stockRow: {
@@ -101,4 +106,14 @@ const styles = StyleSheet.create({
   },
   stockCount: { color: COLORS.white, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.black },
   empty: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body, textAlign: "center", paddingVertical: SPACING.xxl },
+  kioskBanner: {
+    flexDirection: "row", alignItems: "center", gap: SPACING.lg,
+    marginHorizontal: SPACING.xl, marginBottom: SPACING.xl,
+    backgroundColor: "#EBF5EE", borderRadius: 8,
+    padding: SPACING.xl, borderWidth: 1, borderColor: "#C5E8CF",
+  },
+  kioskEmoji: { fontSize: 28 },
+  kioskTitle: { fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold, color: "#2D8C4E" },
+  kioskDesc: { fontSize: FONT_SIZE.small, color: "#4A7A5A", marginTop: 2 },
+  kioskArrow: { fontSize: FONT_SIZE.large, color: "#2D8C4E", fontWeight: FONT_WEIGHT.bold },
 });

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList,
+  View, Text, StyleSheet, TouchableOpacity, TextInput,
   Alert, ActivityIndicator, ScrollView, TouchableWithoutFeedback, Keyboard,
 } from "react-native";
 import * as Haptics from "expo-haptics";
@@ -175,7 +175,7 @@ export default function CheckoutScreen({ coordinatorId, onBack }: Props) {
               <TouchableOpacity key={v.id} style={styles.resultRow} onPress={() => selectVisitor(v)}>
                 <View>
                   <Text style={styles.resultName}>{v.name}</Text>
-                  <Text style={styles.resultMeta}>{v.affiliation} · {v.total_checkouts} previous checkouts</Text>
+                  <Text style={styles.resultMeta}>{v.affiliation}</Text>
                 </View>
                 <Text style={styles.arrow}>→</Text>
               </TouchableOpacity>

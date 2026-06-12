@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from "react-native";
 import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 
 interface Props {
@@ -10,6 +10,9 @@ interface Props {
 }
 
 export default function ModeSelectScreen({ coordinatorName, onSelectDrive, onSelectDepot, onLogout }: Props) {
+  const { width } = useWindowDimensions();
+  const isIPad = width >= 768;
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -18,26 +21,26 @@ export default function ModeSelectScreen({ coordinatorName, onSelectDrive, onSel
           <TouchableOpacity onPress={onLogout}><Text style={styles.logoutText}>Log out</Text></TouchableOpacity>
         </View>
         <Text style={styles.greeting}>Hi, {coordinatorName}</Text>
-        <Text style={styles.title}>ReuseScan</Text>
+        <Text style={[styles.title, isIPad && { fontSize: 40 }]}>ReuseScan</Text>
       </View>
 
-      <View style={styles.content}>
+      <View style={[styles.content, isIPad && styles.contentIPad]}>
         <Text style={styles.sectionLabel}>SELECT MODE</Text>
 
-        <TouchableOpacity style={styles.modeCard} onPress={onSelectDrive} activeOpacity={0.8}>
-          <View style={styles.modeIcon}><Text style={styles.modeEmoji}>📦</Text></View>
+        <TouchableOpacity style={[styles.modeCard, isIPad && styles.modeCardIPad]} onPress={onSelectDrive} activeOpacity={0.8}>
+          <View style={[styles.modeIcon, isIPad && styles.modeIconIPad]}><Text style={[styles.modeEmoji, isIPad && { fontSize: 32 }]}>📦</Text></View>
           <View style={styles.modeInfo}>
-            <Text style={styles.modeTitle}>Drive Mode</Text>
-            <Text style={styles.modeDesc}>Move-out week donation collection at POD stations across campus</Text>
+            <Text style={[styles.modeTitle, isIPad && { fontSize: FONT_SIZE.heading }]}>Drive Mode</Text>
+            <Text style={[styles.modeDesc, isIPad && { fontSize: FONT_SIZE.body }]}>Move-out week donation collection at POD stations across campus</Text>
           </View>
           <Text style={styles.arrow}>→</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.modeCard, styles.modeCardRed]} onPress={onSelectDepot} activeOpacity={0.8}>
-          <View style={[styles.modeIcon, { backgroundColor: "rgba(255,255,255,0.15)" }]}><Text style={styles.modeEmoji}>🏪</Text></View>
+        <TouchableOpacity style={[styles.modeCard, styles.modeCardRed, isIPad && styles.modeCardIPad]} onPress={onSelectDepot} activeOpacity={0.8}>
+          <View style={[styles.modeIcon, isIPad && styles.modeIconIPad, { backgroundColor: "rgba(255,255,255,0.15)" }]}><Text style={[styles.modeEmoji, isIPad && { fontSize: 32 }]}>🏪</Text></View>
           <View style={styles.modeInfo}>
-            <Text style={[styles.modeTitle, { color: COLORS.white }]}>Depot Mode</Text>
-            <Text style={[styles.modeDesc, { color: "rgba(255,255,255,0.7)" }]}>Year-round Reuse Depot — receive donations and manage student checkouts</Text>
+            <Text style={[styles.modeTitle, { color: COLORS.white }, isIPad && { fontSize: FONT_SIZE.heading }]}>Depot Mode</Text>
+            <Text style={[styles.modeDesc, { color: "rgba(255,255,255,0.7)" }, isIPad && { fontSize: FONT_SIZE.body }]}>Year-round Reuse Depot — receive donations and manage student checkouts</Text>
           </View>
           <Text style={[styles.arrow, { color: COLORS.white }]}>→</Text>
         </TouchableOpacity>
@@ -56,6 +59,9 @@ const styles = StyleSheet.create({
   greeting: { color: COLORS.textLight, fontSize: FONT_SIZE.body, marginBottom: SPACING.xs },
   title: { color: COLORS.white, fontSize: FONT_SIZE.heading, fontWeight: FONT_WEIGHT.black },
   content: { padding: SPACING.xl },
+  contentIPad: { maxWidth: 640, width: "100%", alignSelf: "center", paddingTop: SPACING.xxxl },
+  modeCardIPad: { padding: SPACING.xxl, marginBottom: SPACING.xl },
+  modeIconIPad: { width: 64, height: 64, marginRight: SPACING.xl },
   sectionLabel: { fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold, color: COLORS.red, letterSpacing: 2.5, marginBottom: SPACING.xl },
   modeCard: {
     flexDirection: "row", alignItems: "center", backgroundColor: COLORS.white,
