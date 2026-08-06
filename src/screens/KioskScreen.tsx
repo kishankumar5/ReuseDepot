@@ -5,7 +5,7 @@ import {
   TouchableWithoutFeedback, useWindowDimensions,
 } from "react-native";
 import { Audio } from "expo-av";
-import { Shirt, Watch, Home, UtensilsCrossed, Briefcase, Palette, Laptop, BookOpen, Package, LucideIcon } from "lucide-react-native";
+import { Shirt, Watch, Home, UtensilsCrossed, Briefcase, Palette, Laptop, BookOpen, Package, LucideIcon, AlertTriangle } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { supabase } from "../lib/supabase";
 import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../constants/theme";
@@ -82,8 +82,9 @@ export default function KioskScreen({ onExit }: Props) {
   const idleCountRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const tyTimerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { width } = useWindowDimensions();
-  const isIPad = width >= 768;
+  const { width, height } = useWindowDimensions();
+  const isIPad = Math.max(width, height) >= 768;
+  const isLandscape = width > height;
   const totalItems = Object.values(counts).reduce((s, v) => s + v, 0);
 
   // Audio
@@ -282,54 +283,90 @@ export default function KioskScreen({ onExit }: Props) {
           <TouchableOpacity onPress={hardReset}>
             <Text style={styles.formBack}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.formTitle}>What are you taking?</Text>
+          <Text style={[styles.formTitle, isIPad && { fontSize: 32 }]}>What are you taking?</Text>
           <Text style={styles.formSubtitle}>Tap a category to add · We suggest up to 3 items total</Text>
         </View>
 
         {totalItems > 3 && (
           <View style={styles.warningBanner}>
+            <AlertTriangle size={22} color={COLORS.white} strokeWidth={2} />
             <Text style={styles.warningText}>
-              ⚠️  {totalItems} items selected — please leave some for others!
+              {totalItems} items selected — please leave some for others!
             </Text>
           </View>
         )}
 
-        <ScrollView contentContainerStyle={[styles.grid, isIPad && styles.gridIPad]} onTouchStart={resetIdleTimer}>
-          {CATEGORIES.map((cat) => {
-            const count = counts[cat.key];
-            const iconColor = count > 0 ? GREEN : COLORS.textSecondary;
-            return (
-              <TouchableOpacity
-                key={cat.key}
-                style={[styles.catCard, count > 0 && styles.catCardActive, isIPad && styles.catCardIPad]}
-                onPress={() => adjust(cat.key, 1)}
-                activeOpacity={0.75}
-              >
-                {count > 0 && (
-                  <TouchableOpacity style={styles.minusBtn} onPress={() => adjust(cat.key, -1)}>
-                    <Text style={styles.minusBtnText}>−</Text>
-                  </TouchableOpacity>
-                )}
-                {count > 0 && (
-                  <View style={styles.countBadge}>
-                    <Text style={styles.countBadgeText}>{count}</Text>
-                  </View>
-                )}
-                <cat.Icon size={isIPad ? 52 : 36} color={iconColor} strokeWidth={1.5} />
-                <Text style={[styles.catLabel, count > 0 && styles.catLabelActive]}>{cat.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        {isIPad ? (
+          // iPad: perfect 3×3 flex grid that fills all available space
+          <View style={styles.iPadGrid} onTouchStart={resetIdleTimer}>
+            {[0, 1, 2].map((row) => (
+              <View key={row} style={styles.iPadRow}>
+                {CATEGORIES.slice(row * 3, row * 3 + 3).map((cat) => {
+                  const count = counts[cat.key];
+                  const iconColor = count > 0 ? GREEN : "#A8C5B0";
+                  return (
+                    <TouchableOpacity
+                      key={cat.key}
+                      style={[styles.iPadCard, count > 0 && styles.catCardActive]}
+                      onPress={() => adjust(cat.key, 1)}
+                      activeOpacity={0.75}
+                    >
+                      {count > 0 && (
+                        <TouchableOpacity style={styles.minusBtn} onPress={() => adjust(cat.key, -1)}>
+                          <Text style={styles.minusBtnText}>−</Text>
+                        </TouchableOpacity>
+                      )}
+                      {count > 0 && (
+                        <View style={[styles.countBadge, { width: 32, height: 32 }]}>
+                          <Text style={[styles.countBadgeText, { fontSize: FONT_SIZE.body }]}>{count}</Text>
+                        </View>
+                      )}
+                      <cat.Icon size={56} color={iconColor} strokeWidth={1.5} />
+                      <Text style={[styles.catLabel, count > 0 && styles.catLabelActive, { fontSize: FONT_SIZE.large }]}>{cat.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.grid} onTouchStart={resetIdleTimer}>
+            {CATEGORIES.map((cat) => {
+              const count = counts[cat.key];
+              const iconColor = count > 0 ? GREEN : COLORS.textSecondary;
+              return (
+                <TouchableOpacity
+                  key={cat.key}
+                  style={[styles.catCard, count > 0 && styles.catCardActive]}
+                  onPress={() => adjust(cat.key, 1)}
+                  activeOpacity={0.75}
+                >
+                  {count > 0 && (
+                    <TouchableOpacity style={styles.minusBtn} onPress={() => adjust(cat.key, -1)}>
+                      <Text style={styles.minusBtnText}>−</Text>
+                    </TouchableOpacity>
+                  )}
+                  {count > 0 && (
+                    <View style={styles.countBadge}>
+                      <Text style={styles.countBadgeText}>{count}</Text>
+                    </View>
+                  )}
+                  <cat.Icon size={36} color={iconColor} strokeWidth={1.5} />
+                  <Text style={[styles.catLabel, count > 0 && styles.catLabelActive]}>{cat.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
 
-        <View style={styles.bottomBar}>
+        <View style={[styles.bottomBar, isIPad && styles.bottomBarIPad]}>
           <TouchableOpacity
-            style={[styles.nextBtn, totalItems === 0 && styles.nextBtnOff]}
+            style={[styles.nextBtn, totalItems === 0 && styles.nextBtnOff, isIPad && { paddingVertical: SPACING.xxl }]}
             onPress={() => { resetIdleTimer(); setStep("details"); }}
             disabled={totalItems === 0}
             activeOpacity={0.85}
           >
-            <Text style={styles.nextBtnText}>
+            <Text style={[styles.nextBtnText, isIPad && { fontSize: FONT_SIZE.title }]}>
               Next  ·  {totalItems} item{totalItems !== 1 ? "s" : ""}  →
             </Text>
           </TouchableOpacity>
@@ -477,24 +514,33 @@ const styles = StyleSheet.create({
 
   // Warning
   warningBanner: {
-    backgroundColor: "#FFF8E6", borderLeftWidth: 4, borderLeftColor: COLORS.warning,
-    padding: SPACING.lg,
+    backgroundColor: "#FF6B35", flexDirection: "row",
+    alignItems: "center", padding: SPACING.lg, gap: SPACING.sm,
   },
-  warningText: { fontSize: FONT_SIZE.small, color: "#7A5C00" },
+  warningText: { fontSize: FONT_SIZE.body, color: COLORS.white, fontWeight: FONT_WEIGHT.semibold },
+
+  // iPad 3x3 grid
+  iPadGrid: { flex: 1, padding: SPACING.lg, gap: SPACING.md },
+  iPadRow: { flex: 1, flexDirection: "row", gap: SPACING.md },
+  iPadCard: {
+    flex: 1, backgroundColor: COLORS.backgroundAlt,
+    borderRadius: RADIUS.lg, alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: "transparent", position: "relative", gap: SPACING.md,
+  },
 
   // Item grid
   grid: {
     flexDirection: "row", flexWrap: "wrap",
     padding: SPACING.lg, gap: SPACING.md, paddingBottom: 100,
   },
-  gridIPad: { padding: SPACING.xl, gap: SPACING.lg },
+  gridIPad: { padding: SPACING.xl, gap: SPACING.lg, flexGrow: 1, alignContent: "stretch" },
   catCard: {
     width: "31%", height: 110, backgroundColor: COLORS.backgroundAlt,
     borderRadius: RADIUS.lg, alignItems: "center", justifyContent: "center",
     borderWidth: 2, borderColor: "transparent", position: "relative",
     paddingTop: SPACING.md, paddingBottom: SPACING.sm, gap: SPACING.sm,
   },
-  catCardIPad: { width: "23%", height: 160 },
+  catCardIPad: { width: "23%", flexGrow: 1, minHeight: 160 },
   catCardActive: { backgroundColor: GREEN_LIGHT, borderColor: GREEN },
   catLabel: { fontSize: FONT_SIZE.small, fontWeight: FONT_WEIGHT.semibold, color: COLORS.textSecondary, textAlign: "center" },
   catLabelActive: { color: GREEN },
@@ -517,6 +563,9 @@ const styles = StyleSheet.create({
     position: "absolute", bottom: 0, left: 0, right: 0,
     padding: SPACING.xl, backgroundColor: COLORS.white,
     borderTopWidth: 1, borderTopColor: COLORS.divider,
+  },
+  bottomBarIPad: {
+    position: "relative", bottom: undefined, left: undefined, right: undefined,
   },
   nextBtn: { backgroundColor: GREEN, borderRadius: RADIUS.lg, paddingVertical: SPACING.xl, alignItems: "center" },
   nextBtnOff: { backgroundColor: COLORS.divider },
