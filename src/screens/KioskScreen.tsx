@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView,
   KeyboardAvoidingView, Platform, Alert, Animated, Modal,
   TouchableWithoutFeedback, useWindowDimensions,
 } from "react-native";
 import { Audio } from "expo-av";
-import { Shirt, Watch, Home, UtensilsCrossed, Briefcase, Palette, Laptop, BookOpen, Package, LucideIcon, AlertTriangle } from "lucide-react-native";
+import { Shirt, Watch, Home, UtensilsCrossed, Briefcase, Palette, Laptop, BookOpen, Package, LucideIcon, AlertTriangle, Trash2 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { supabase } from "../lib/supabase";
 import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../constants/theme";
@@ -63,7 +63,8 @@ interface Props { onExit: () => void; }
 export default function KioskScreen({ onExit }: Props) {
   const [step, setStep]               = useState<Step>("standby");
   const [counts, setCounts]           = useState<Counts>(emptyCounts());
-  const [name, setName]               = useState("");
+  const [firstName, setFirstName]     = useState("");
+  const [lastName, setLastName]       = useState("");
   const [email, setEmail]             = useState("");
   const [submitting, setSubmitting]   = useState(false);
   const [thankYouMsg, setThankYouMsg] = useState("");
@@ -77,6 +78,12 @@ export default function KioskScreen({ onExit }: Props) {
 
   // Idle
   const [showIdleModal, setShowIdleModal] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState(false);
+  const slideAnim = useRef(new Animated.Value(1)).current;
+
+  const STAFF_PIN = "1234";
   const [idleCountdown, setIdleCountdown] = useState(IDLE_WARN_SECS);
   const idleTimerRef  = useRef<ReturnType<typeof setTimeout>  | null>(null);
   const idleCountRef  = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -179,28 +186,47 @@ export default function KioskScreen({ onExit }: Props) {
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   const hardReset = () => {
-    setName(""); setEmail(""); setCounts(emptyCounts());
+    setFirstName(""); setLastName(""); setEmail(""); setCounts(emptyCounts());
     setTyCountdown(6); setShowIdleModal(false); setStep("standby");
+  };
+
+  const navigateTo = useCallback((next: Step) => {
+    Animated.timing(slideAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+      setStep(next);
+      Animated.timing(slideAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    });
+  }, [slideAnim]);
+
+  const handlePinPress = (digit: string) => {
+    setPinError(false);
+    const next = pin + digit;
+    setPin(next);
+    if (next.length === 4) {
+      if (next === STAFF_PIN) { setShowPinModal(false); setPin(""); onExit(); }
+      else { setPinError(true); setTimeout(() => setPin(""), 600); }
+    }
   };
 
   const adjust = (key: string, delta: number) => {
     resetIdleTimer();
+    if (delta > 0 && totalItems >= 3) {
+      playWarning();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCounts((prev) => {
-      const next = { ...prev, [key]: Math.max(0, prev[key] + delta) };
-      const newTotal = Object.values(next).reduce((s, v) => s + v, 0);
-      if (newTotal > 3 && delta > 0) { playWarning(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); }
-      return next;
-    });
+    setCounts((prev) => ({ ...prev, [key]: Math.max(0, prev[key] + delta) }));
   };
 
   const handleSubmit = async () => {
-    if (!name.trim()) { Alert.alert("Name required", "Please enter your name."); return; }
+    if (!firstName.trim() || !lastName.trim()) { Alert.alert("Name required", "Please enter your first and last name."); return; }
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { Alert.alert("Invalid email", "Please enter a valid email address or leave it blank."); return; }
     setSubmitting(true);
+    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
     const items = CATEGORIES.filter((c) => counts[c.key] > 0)
       .map((c) => ({ category: c.label, quantity: counts[c.key] }));
     const { error } = await supabase.from("kiosk_logs").insert({
-      full_name: name.trim(),
+      full_name: fullName,
       email: email.trim().toLowerCase() || null,
       date: new Date().toISOString().split("T")[0],
       items,
@@ -218,7 +244,8 @@ export default function KioskScreen({ onExit }: Props) {
   if (step === "standby") {
     const fact = FACTS[factIndex];
     return (
-      <TouchableWithoutFeedback onPress={() => setStep("items")}>
+      <>
+      <TouchableWithoutFeedback onPress={() => navigateTo("items")}>
         <View style={styles.standby}>
           <View style={styles.standbyTop}>
             <Text style={styles.standbyIcon}>♻️</Text>
@@ -239,25 +266,52 @@ export default function KioskScreen({ onExit }: Props) {
           </Animated.View>
 
           <View style={styles.tapPrompt}>
-            <Text style={styles.tapText}>Tap anywhere to take items</Text>
-            <View style={styles.tapDots}>
-              {FACTS.map((_, i) => (
-                <View key={i} style={[styles.dot, i === factIndex && styles.dotActive]} />
-              ))}
+            <View style={styles.tapPill}>
+              <Text style={styles.tapText}>Tap anywhere to begin</Text>
             </View>
           </View>
 
-          <TouchableOpacity style={styles.staffExit} onPress={onExit}>
+          <TouchableOpacity style={styles.staffExit} onPress={() => { setPin(""); setPinError(false); setShowPinModal(true); }}>
             <Text style={styles.staffExitText}>Staff Exit</Text>
           </TouchableOpacity>
         </View>
       </TouchableWithoutFeedback>
+
+      <Modal transparent visible={showPinModal} animationType="fade">
+        <View style={styles.pinOverlay}>
+          <View style={styles.pinCard}>
+            <Text style={styles.pinTitle}>Staff Access</Text>
+            <Text style={styles.pinSub}>Enter PIN to exit kiosk mode</Text>
+            <View style={styles.pinDots}>
+              {[0,1,2,3].map(i => (
+                <View key={i} style={[styles.pinDot, pin.length > i && styles.pinDotFilled, pinError && styles.pinDotError]} />
+              ))}
+            </View>
+            {pinError && <Text style={styles.pinErrorText}>Incorrect PIN</Text>}
+            <View style={styles.pinGrid}>
+              {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((d) => (
+                <TouchableOpacity
+                  key={d} style={[styles.pinKey, d === "" && { opacity: 0 }]}
+                  onPress={() => d === "⌫" ? setPin(p => p.slice(0,-1)) : d !== "" && handlePinPress(d)}
+                  disabled={d === ""}
+                >
+                  <Text style={styles.pinKeyText}>{d}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity onPress={() => setShowPinModal(false)}>
+              <Text style={styles.pinCancel}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      </>
     );
   }
 
   // ── THANK YOU ─────────────────────────────────────────────────────────────
   if (step === "thankyou") return (
-    <View style={styles.thankYou}>
+    <Animated.View style={[styles.thankYou, { opacity: slideAnim }]}>
       <Text style={[styles.tyEmoji, isIPad && { fontSize: 120 }]}>🌱</Text>
       <Text style={[styles.tyTitle, isIPad && { fontSize: 72 }]}>Thank You!</Text>
       <Text style={[styles.tyMessage, isIPad && { fontSize: FONT_SIZE.title, lineHeight: 38, maxWidth: 600 }]}>{thankYouMsg}</Text>
@@ -272,12 +326,12 @@ export default function KioskScreen({ onExit }: Props) {
       <View style={styles.tyCountdown}>
         <Text style={[styles.tyCountdownText, isIPad && { fontSize: FONT_SIZE.body }]}>Returning to home in {tyCountdown}s</Text>
       </View>
-    </View>
+    </Animated.View>
   );
 
   // ── ITEMS GRID ────────────────────────────────────────────────────────────
   if (step === "items") return (
-    <>
+    <Animated.View style={[{ flex: 1 }, { opacity: slideAnim }]}>
       <View style={styles.container}>
         <View style={styles.formHeader}>
           <TouchableOpacity onPress={hardReset}>
@@ -304,25 +358,30 @@ export default function KioskScreen({ onExit }: Props) {
                 {CATEGORIES.slice(row * 3, row * 3 + 3).map((cat) => {
                   const count = counts[cat.key];
                   const iconColor = count > 0 ? GREEN : "#A8C5B0";
+                  const maxed = totalItems >= 3 && count === 0;
                   return (
                     <TouchableOpacity
                       key={cat.key}
-                      style={[styles.iPadCard, count > 0 && styles.catCardActive]}
+                      style={[styles.iPadCard, count > 0 && styles.catCardActive, maxed && styles.catCardDisabled]}
                       onPress={() => adjust(cat.key, 1)}
-                      activeOpacity={0.75}
+                      activeOpacity={maxed ? 0.9 : 0.75}
                     >
                       {count > 0 && (
-                        <TouchableOpacity style={styles.minusBtn} onPress={() => adjust(cat.key, -1)}>
-                          <Text style={styles.minusBtnText}>−</Text>
-                        </TouchableOpacity>
-                      )}
-                      {count > 0 && (
-                        <View style={[styles.countBadge, { width: 32, height: 32 }]}>
+                        <View style={[styles.countBadge, { width: 32, height: 32, top: SPACING.md, right: SPACING.md }]}>
                           <Text style={[styles.countBadgeText, { fontSize: FONT_SIZE.body }]}>{count}</Text>
                         </View>
                       )}
-                      <cat.Icon size={56} color={iconColor} strokeWidth={1.5} />
-                      <Text style={[styles.catLabel, count > 0 && styles.catLabelActive, { fontSize: FONT_SIZE.large }]}>{cat.label}</Text>
+                      <View style={styles.cardCenter}>
+                        <cat.Icon size={56} color={maxed ? "#AAAAAA" : iconColor} strokeWidth={1.5} />
+                        <Text style={[styles.catLabel, count > 0 && styles.catLabelActive, maxed && { color: "#AAAAAA" }]}>{cat.label}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.removeOneBtn, count === 0 && styles.removeOneBtnHidden]}
+                        onPress={(e) => { e.stopPropagation(); adjust(cat.key, -1); }}
+                        disabled={count === 0}
+                      >
+                        <View style={styles.removeOneBtnInner}><Trash2 size={14} color={COLORS.white} strokeWidth={2} /><Text style={styles.removeOneBtnText}>Remove one</Text></View>
+                      </TouchableOpacity>
                     </TouchableOpacity>
                   );
                 })}
@@ -334,25 +393,31 @@ export default function KioskScreen({ onExit }: Props) {
             {CATEGORIES.map((cat) => {
               const count = counts[cat.key];
               const iconColor = count > 0 ? GREEN : COLORS.textSecondary;
+              const maxed = totalItems >= 3 && count === 0;
               return (
                 <TouchableOpacity
                   key={cat.key}
-                  style={[styles.catCard, count > 0 && styles.catCardActive]}
+                  style={[styles.catCard, count > 0 && styles.catCardActive, maxed && styles.catCardDisabled]}
                   onPress={() => adjust(cat.key, 1)}
-                  activeOpacity={0.75}
+                  activeOpacity={maxed ? 1 : 0.75}
+                  disabled={maxed}
                 >
-                  {count > 0 && (
-                    <TouchableOpacity style={styles.minusBtn} onPress={() => adjust(cat.key, -1)}>
-                      <Text style={styles.minusBtnText}>−</Text>
-                    </TouchableOpacity>
-                  )}
                   {count > 0 && (
                     <View style={styles.countBadge}>
                       <Text style={styles.countBadgeText}>{count}</Text>
                     </View>
                   )}
-                  <cat.Icon size={36} color={iconColor} strokeWidth={1.5} />
-                  <Text style={[styles.catLabel, count > 0 && styles.catLabelActive]}>{cat.label}</Text>
+                  <View style={styles.cardCenter}>
+                    <cat.Icon size={36} color={maxed ? COLORS.divider : iconColor} strokeWidth={1.5} />
+                    <Text style={[styles.catLabel, count > 0 && styles.catLabelActive, maxed && { color: COLORS.divider }]}>{cat.label}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.removeOneBtn, count === 0 && styles.removeOneBtnHidden]}
+                    onPress={(e) => { e.stopPropagation(); adjust(cat.key, -1); }}
+                    disabled={count === 0}
+                  >
+                    <View style={styles.removeOneBtnInner}><Trash2 size={14} color={COLORS.white} strokeWidth={2} /><Text style={styles.removeOneBtnText}>Remove one</Text></View>
+                  </TouchableOpacity>
                 </TouchableOpacity>
               );
             })}
@@ -361,9 +426,9 @@ export default function KioskScreen({ onExit }: Props) {
 
         <View style={[styles.bottomBar, isIPad && styles.bottomBarIPad]}>
           <TouchableOpacity
-            style={[styles.nextBtn, totalItems === 0 && styles.nextBtnOff, isIPad && { paddingVertical: SPACING.xxl }]}
-            onPress={() => { resetIdleTimer(); setStep("details"); }}
-            disabled={totalItems === 0}
+            style={[styles.nextBtn, (totalItems === 0 || totalItems > 3) && styles.nextBtnOff, isIPad && { paddingVertical: SPACING.xxl }]}
+            onPress={() => { resetIdleTimer(); navigateTo("details"); }}
+            disabled={totalItems === 0 || totalItems > 3}
             activeOpacity={0.85}
           >
             <Text style={[styles.nextBtnText, isIPad && { fontSize: FONT_SIZE.title }]}>
@@ -379,12 +444,12 @@ export default function KioskScreen({ onExit }: Props) {
         onStillHere={() => { setShowIdleModal(false); resetIdleTimer(); }}
         onGoBack={hardReset}
       />
-    </>
+    </Animated.View>
   );
 
   // ── DETAILS ───────────────────────────────────────────────────────────────
   return (
-    <>
+    <Animated.View style={[{ flex: 1 }, { opacity: slideAnim }]}>
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: COLORS.white }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}>
 
@@ -393,58 +458,94 @@ export default function KioskScreen({ onExit }: Props) {
             <Text style={styles.formBack}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.formTitle}>Almost done!</Text>
-          <Text style={styles.formSubtitle}>Just your name so we can keep track</Text>
+          <Text style={styles.formSubtitle}>First and last name are required · Email is optional</Text>
         </View>
 
         <View style={[styles.detailsBody, isIPad && styles.detailsBodyIPad]}>
-          <TextInput
-            style={styles.bigInput}
-            placeholder="Your full name"
-            placeholderTextColor={COLORS.textLight}
-            value={name}
-            onChangeText={(t) => { setName(t); resetIdleTimer(); }}
-            autoCapitalize="words"
-            autoFocus
-          />
-          <TextInput
-            style={styles.smallInput}
-            placeholder="Email (optional)"
-            placeholderTextColor={COLORS.textLight}
-            value={email}
-            onChangeText={(t) => { setEmail(t); resetIdleTimer(); }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          <View style={styles.formCard}>
+            <Text style={styles.formCardLabel}>FIRST NAME <Text style={styles.formCardRequired}>*</Text></Text>
+            <TextInput
+              style={styles.formCardInput}
+              placeholder="Enter first name"
+              placeholderTextColor={COLORS.textLight}
+              value={firstName}
+              onChangeText={(t) => { setFirstName(t); resetIdleTimer(); }}
+              autoCapitalize="words"
+              autoFocus
+            />
+            <View style={styles.formCardDivider} />
+            <Text style={styles.formCardLabel}>LAST NAME <Text style={styles.formCardRequired}>*</Text></Text>
+            <TextInput
+              style={styles.formCardInput}
+              placeholder="Enter last name"
+              placeholderTextColor={COLORS.textLight}
+              value={lastName}
+              onChangeText={(t) => { setLastName(t); resetIdleTimer(); }}
+              autoCapitalize="words"
+            />
+            <View style={styles.formCardDivider} />
+            <Text style={styles.formCardLabel}>EMAIL <Text style={styles.formCardOptional}>(optional)</Text></Text>
+            <TextInput
+              style={[styles.formCardInput, email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.includes("@") && styles.formCardInputError]}
+              placeholder="Enter email address"
+              placeholderTextColor={COLORS.textLight}
+              value={email}
+              onChangeText={(t) => { setEmail(t); resetIdleTimer(); }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {email.includes("@") === false && email.length > 0 && (
+              <View style={styles.emailDropdown}>
+                {["@northeastern.edu", "@gmail.com", "@yahoo.com"].map((suffix, i) => (
+                  <TouchableOpacity
+                    key={suffix}
+                    style={[styles.emailDropdownItem, i < 2 && styles.emailDropdownDivider]}
+                    onPress={() => { setEmail(email + suffix); resetIdleTimer(); }}
+                  >
+                    <Text style={styles.emailDropdownText}>{email}<Text style={styles.emailDropdownSuffix}>{suffix}</Text></Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            {email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.includes("@") && (
+              <Text style={styles.emailErrorText}>Please enter a valid email address</Text>
+            )}
+            <View style={styles.newsletterInline}>
+              <Text style={styles.newsletterInlineText}>📬  Add your email to get first access to new arrivals and depot events!</Text>
+            </View>
 
-          <View style={styles.detailsSummary}>
-            {CATEGORIES.filter((c) => counts[c.key] > 0).map((c) => (
-              <Text key={c.key} style={styles.summaryItem}>
-                {c.label}  ×  {counts[c.key]}
+            <View style={styles.formCardDivider} />
+
+            <View style={styles.detailsSummary}>
+              {CATEGORIES.filter((c) => counts[c.key] > 0).map((c) => (
+                <Text key={c.key} style={styles.summaryItem}>
+                  {c.label}  ×  {counts[c.key]}
+                </Text>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.submitBtn, (submitting || !firstName.trim() || !lastName.trim()) && styles.submitBtnOff]}
+              onPress={handleSubmit}
+              disabled={submitting || !firstName.trim() || !lastName.trim()}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.submitText}>
+                {submitting ? "Saving…" : "Submit  ✓"}
               </Text>
-            ))}
+            </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={[styles.submitBtn, (submitting || !name.trim()) && styles.submitBtnOff]}
-            onPress={handleSubmit}
-            disabled={submitting || !name.trim()}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.submitText}>
-              {submitting ? "Saving…" : "Submit  ✓"}
-            </Text>
-          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
 
       <IdleModal
         visible={showIdleModal}
         countdown={idleCountdown}
-        onStillHere={() => { setShowIdleModal(false); resetIdleTimer(); }}
+        onStillHere={() => { setFirstName(""); setLastName(""); setEmail(""); setShowIdleModal(false); resetIdleTimer(); }}
         onGoBack={hardReset}
       />
-    </>
+    </Animated.View>
   );
 }
 
@@ -496,11 +597,13 @@ const styles = StyleSheet.create({
   factEmoji: { fontSize: 80, marginBottom: SPACING.xl },
   factStat: { fontSize: 52, fontWeight: FONT_WEIGHT.black, color: GREEN_MID, textAlign: "center", marginBottom: SPACING.lg },
   factDesc: { fontSize: FONT_SIZE.large, color: "rgba(255,255,255,0.85)", textAlign: "center", lineHeight: 30 },
-  tapPrompt: { alignItems: "center", gap: SPACING.lg },
-  tapText: { fontSize: FONT_SIZE.body, color: "rgba(255,255,255,0.5)", letterSpacing: 1 },
-  tapDots: { flexDirection: "row", gap: SPACING.sm },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.25)" },
-  dotActive: { backgroundColor: GREEN_MID, width: 18 },
+  tapPrompt: { alignItems: "center" },
+  tapPill: {
+    backgroundColor: "rgba(255,255,255,0.18)", borderRadius: RADIUS.full,
+    paddingVertical: SPACING.md, paddingHorizontal: SPACING.xxxl,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.35)",
+  },
+  tapText: { fontSize: FONT_SIZE.large, color: COLORS.white, fontWeight: FONT_WEIGHT.semibold, letterSpacing: 0.5 },
   staffExit: { position: "absolute", bottom: SPACING.xl, right: SPACING.xl },
   staffExitText: { fontSize: FONT_SIZE.small, color: "rgba(255,255,255,0.2)", fontWeight: FONT_WEIGHT.semibold },
 
@@ -524,8 +627,9 @@ const styles = StyleSheet.create({
   iPadRow: { flex: 1, flexDirection: "row", gap: SPACING.md },
   iPadCard: {
     flex: 1, backgroundColor: COLORS.backgroundAlt,
-    borderRadius: RADIUS.lg, alignItems: "center", justifyContent: "center",
-    borderWidth: 2, borderColor: "transparent", position: "relative", gap: SPACING.md,
+    borderRadius: RADIUS.lg, alignItems: "center", justifyContent: "space-between",
+    borderWidth: 2, borderColor: "transparent", overflow: "hidden",
+    flexDirection: "column",
   },
 
   // Item grid
@@ -535,13 +639,14 @@ const styles = StyleSheet.create({
   },
   gridIPad: { padding: SPACING.xl, gap: SPACING.lg, flexGrow: 1, alignContent: "stretch" },
   catCard: {
-    width: "31%", height: 110, backgroundColor: COLORS.backgroundAlt,
-    borderRadius: RADIUS.lg, alignItems: "center", justifyContent: "center",
-    borderWidth: 2, borderColor: "transparent", position: "relative",
-    paddingTop: SPACING.md, paddingBottom: SPACING.sm, gap: SPACING.sm,
+    width: "31%", backgroundColor: COLORS.backgroundAlt,
+    borderRadius: RADIUS.lg, alignItems: "center", justifyContent: "space-between",
+    borderWidth: 2, borderColor: "transparent", overflow: "hidden",
+    flexDirection: "column",
   },
   catCardIPad: { width: "23%", flexGrow: 1, minHeight: 160 },
   catCardActive: { backgroundColor: GREEN_LIGHT, borderColor: GREEN },
+  catCardDisabled: { opacity: 0.6 },
   catLabel: { fontSize: FONT_SIZE.small, fontWeight: FONT_WEIGHT.semibold, color: COLORS.textSecondary, textAlign: "center" },
   catLabelActive: { color: GREEN },
   countBadge: {
@@ -550,13 +655,14 @@ const styles = StyleSheet.create({
     width: 26, height: 26, alignItems: "center", justifyContent: "center",
   },
   countBadgeText: { color: COLORS.white, fontSize: FONT_SIZE.small, fontWeight: FONT_WEIGHT.black },
-  minusBtn: {
-    position: "absolute", top: SPACING.sm, left: SPACING.sm,
-    backgroundColor: COLORS.white, borderRadius: RADIUS.full,
-    width: 26, height: 26, alignItems: "center", justifyContent: "center",
-    borderWidth: 1, borderColor: COLORS.divider,
+  cardCenter: { flex: 1, alignItems: "center", justifyContent: "center", gap: SPACING.md },
+  removeOneBtn: {
+    alignSelf: "stretch", alignItems: "center",
+    paddingVertical: SPACING.md,
+    backgroundColor: "#FF6B35",
   },
-  minusBtnText: { fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold, color: COLORS.textPrimary, lineHeight: 20 },
+  removeOneBtnHidden: { opacity: 0 },
+  removeOneBtnText: { fontSize: FONT_SIZE.small, fontWeight: FONT_WEIGHT.bold, color: COLORS.white, letterSpacing: 0.5 },
 
   // Bottom bar
   bottomBar: {
@@ -574,6 +680,46 @@ const styles = StyleSheet.create({
   // Details
   detailsBody: { flex: 1, padding: SPACING.xl, justifyContent: "center" },
   detailsBodyIPad: { maxWidth: 580, width: "100%", alignSelf: "center", paddingHorizontal: SPACING.xxxl },
+  formCard: {
+    backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.divider,
+    padding: SPACING.xl, marginBottom: SPACING.lg,
+    shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  formCardLabel: { fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold, color: COLORS.textSecondary, letterSpacing: 1.2, marginBottom: SPACING.sm },
+  formCardRequired: { color: COLORS.red },
+  formCardOptional: { color: COLORS.textLight, fontWeight: FONT_WEIGHT.regular, letterSpacing: 0 },
+  formCardInput: {
+    fontSize: FONT_SIZE.large, fontWeight: FONT_WEIGHT.semibold, color: COLORS.textPrimary,
+    paddingVertical: SPACING.md, marginBottom: SPACING.md,
+  },
+  formCardInputError: { color: COLORS.red },
+  formCardDivider: { height: 1, backgroundColor: COLORS.divider, marginBottom: SPACING.lg },
+  removeOneBtnInner: { flexDirection: "row", alignItems: "center", gap: SPACING.xs },
+  inputError: { borderBottomColor: COLORS.red },
+  emailDropdown: {
+    backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.divider,
+    borderRadius: RADIUS.md, marginBottom: SPACING.md,
+    shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  emailDropdownItem: { paddingVertical: SPACING.lg, paddingHorizontal: SPACING.lg },
+  emailDropdownDivider: { borderBottomWidth: 1, borderBottomColor: COLORS.divider },
+  emailDropdownText: { fontSize: FONT_SIZE.body, color: COLORS.textPrimary },
+  emailDropdownSuffix: { color: GREEN, fontWeight: FONT_WEIGHT.semibold },
+  emailErrorText: { fontSize: FONT_SIZE.small, color: COLORS.red, marginTop: -SPACING.lg, marginBottom: SPACING.lg },
+  newsletterInline: {
+    backgroundColor: GREEN_LIGHT, borderRadius: RADIUS.md,
+    padding: SPACING.md, marginTop: SPACING.sm, marginBottom: SPACING.md,
+  },
+  newsletterInlineText: { fontSize: FONT_SIZE.small, color: GREEN_DARK, lineHeight: 18 },
+  newsletterCard: {
+    backgroundColor: GREEN_LIGHT, borderWidth: 1, borderColor: GREEN_MID,
+    borderRadius: RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.xxl,
+  },
+  newsletterTitle: { fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold, color: GREEN_DARK, marginBottom: SPACING.xs },
+  newsletterBody: { fontSize: FONT_SIZE.small, color: GREEN_DARK, lineHeight: 20 },
   bigInput: {
     fontSize: 28, fontWeight: FONT_WEIGHT.bold, color: COLORS.textPrimary,
     borderBottomWidth: 3, borderBottomColor: GREEN,
@@ -594,8 +740,9 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.small, color: GREEN, fontWeight: FONT_WEIGHT.semibold,
   },
   submitBtn: {
-    backgroundColor: GREEN, borderRadius: RADIUS.lg,
+    backgroundColor: GREEN, borderRadius: RADIUS.md,
     paddingVertical: SPACING.xl, alignItems: "center",
+    marginTop: SPACING.lg,
   },
   submitBtnOff: { backgroundColor: COLORS.divider },
   submitText: { color: COLORS.white, fontSize: FONT_SIZE.large, fontWeight: FONT_WEIGHT.bold },
@@ -624,4 +771,19 @@ const styles = StyleSheet.create({
   modalBtn: { backgroundColor: GREEN, borderRadius: RADIUS.md, paddingVertical: SPACING.lg, paddingHorizontal: SPACING.xxxl, width: "100%", alignItems: "center" },
   modalBtnText: { color: COLORS.white, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
   modalCancel: { fontSize: FONT_SIZE.small, color: COLORS.textSecondary, marginTop: SPACING.sm },
+
+  // PIN modal
+  pinOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
+  pinCard: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, padding: SPACING.xxxl, alignItems: "center", width: 340 },
+  pinTitle: { fontSize: FONT_SIZE.heading, fontWeight: FONT_WEIGHT.black, color: COLORS.textPrimary, marginBottom: SPACING.xs },
+  pinSub: { fontSize: FONT_SIZE.small, color: COLORS.textSecondary, marginBottom: SPACING.xl },
+  pinDots: { flexDirection: "row", gap: SPACING.lg, marginBottom: SPACING.sm },
+  pinDot: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: COLORS.divider, backgroundColor: "transparent" },
+  pinDotFilled: { backgroundColor: GREEN, borderColor: GREEN },
+  pinDotError: { backgroundColor: COLORS.red, borderColor: COLORS.red },
+  pinErrorText: { fontSize: FONT_SIZE.small, color: COLORS.red, marginBottom: SPACING.md },
+  pinGrid: { flexDirection: "row", flexWrap: "wrap", width: 240, gap: SPACING.md, marginTop: SPACING.xl, marginBottom: SPACING.lg },
+  pinKey: { width: 68, height: 68, borderRadius: RADIUS.full, backgroundColor: COLORS.backgroundAlt, alignItems: "center", justifyContent: "center" },
+  pinKeyText: { fontSize: FONT_SIZE.title, fontWeight: FONT_WEIGHT.bold, color: COLORS.textPrimary },
+  pinCancel: { fontSize: FONT_SIZE.small, color: COLORS.textSecondary, marginTop: SPACING.sm },
 });
